@@ -1,3 +1,1 @@
-// web/config.js
-// ← RenderのあなたのAPI URLに差し替えてください（末尾スラッシュ不要）
-window.API_BASE = "https://lovetype.onrender.com";
+window.API_BASE = 'https://lovetype-b90w.onrender.com';
