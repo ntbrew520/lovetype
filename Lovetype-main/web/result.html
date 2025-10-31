@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>LOVE TYPE｜診断結果</title>
+<script src="./config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+:root{
+  --p1:#ffc5dd; --p2:#ffb9d4; --cream:#fff7ee; --ink:#111;
+  --padX: 8%;
+  --boy-col: clamp(110px, 26%, 160px);
+}
+*{box-sizing:border-box} html,body{height:100%}
+body{margin:0;background:#ffe9f4;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
+.wrap{width:min(520px,94vw);margin:0 auto;padding:20px 0 36px}
+
+/* フレーム */
+.screen{position:relative;width:100%;aspect-ratio:9/16;border-radius:28px;overflow:hidden;
+  box-shadow:0 8px 24px rgba(0,0,0,.08);background:linear-gradient(180deg,var(--p1),var(--p2))}
+.panel{position:absolute;inset:0;border-radius:42px;margin:5% 4%;background:linear-gradient(180deg,var(--p2),var(--p1))}
+
+/* タイトル/詳細 */
+.arc{position:absolute;top:7%;left:0;right:0;text-align:center;font-weight:900;color:#fff;
+  text-shadow:0 3px 0 #ff8fbf;letter-spacing:.4em;z-index:2}
+.link{position:absolute;right:var(--padX);top:6%;
+  background:#fff;border-radius:999px;padding:8px 12px;font-weight:900;
+  text-decoration:none;color:#333;border:3px solid #000;z-index:3}
+
+/* レーダー */
+.radar-wrap{position:absolute;left:var(--padX);right:var(--padX);top:18%;
+  aspect-ratio:1/1;max-height:40%;margin:0 auto}
+.penta-bg{position:absolute;inset:3%;background:var(--cream);
+  clip-path:polygon(50% 0%,100% 38%,80% 100%,20% 100%,0% 38%);
+  transform:scale(1.10);transform-origin:center;z-index:1}
+.radar-box{position:absolute;inset:14%;z-index:2}
+.radar-box canvas{width:100%;height:100%;display:block}
+
+/* ピル＆要約 */
+.bar{position:absolute;left:var(--padX);right:var(--padX);bottom:32%;
+  height:50px;background:var(--cream);border-radius:999px;display:grid;place-items:center;
+  font-weight:900;z-index:2}
+.bubble{
+  position:absolute;
+  left:  calc(var(--padX) + var(--boy-col) + 2%);
+  right: var(--padX);
+  bottom: 12%;
+  min-height:16%;
+  background:#fff;border:6px solid var(--ink);border-radius:22px;
+  display:flex;align-items:center;justify-content:center;padding:14px 16px;
+  text-align:center;font-weight:700;z-index:2;width:auto;
+}
+.boy{position:absolute;left:calc(var(--padX) - 2%);bottom:7%;width:var(--boy-col);
+  pointer-events:none;z-index:1}
+
+/* ===== スマホ最適化（五角形を小さめ／ピルは上へ／男の子と離す） ===== */
+@media (max-width:480px){
+  :root{
+    --padX: 7%;
+    --boy-col: clamp(100px, 24%, 140px);
+  }
+
+  .link{
+    top: calc(1.2% + env(safe-area-inset-top, 0px));
+    transform: scale(.86);
+    transform-origin: 100% 0;
+  }
+  .arc{
+    top: calc(10.2% + env(safe-area-inset-top, 0px)*0.1);
+    width: calc(100% - 40%);
+    margin-left: 0; margin-right: auto;
+    letter-spacing: .28em;
+  }
+
+  /* ▼ 五角形を“少しだけ”小さく */
+  .radar-wrap{ top: 14%; max-height: 42%; }   /* 44% → 42% */
+  .penta-bg{ inset: 3.6%; transform: scale(0.98); } /* 1.00 → 0.98 */
+  .radar-box{ inset: 10%; }                    /* 見やすさキープ */
+
+  /* ▼ ピルを“下へ”＝レーダーと確実に離す */
+  .bar{ bottom: 33%; height: 54px; }           /* 38% → 33% */
+
+  /* 下段は前回と同じ（微調整のみ） */
+  .bubble{
+    left: calc(var(--padX) + var(--boy-col) + 1.6%);
+    right: var(--padX);
+    bottom: 9%;
+    padding: 12px 14px;
+  }
+  .boy{ bottom: 5%; }
+}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <section class="screen">
+    <div class="panel"></div>
+    <div class="arc" aria-hidden="true">診　断　結　果</div>
+    <a id="toDetail" class="link" href="#">詳細を見る →</a>
+
+    <div class="radar-wrap">
+      <div class="penta-bg" aria-hidden="true"></div>
+      <div class="radar-box"><canvas id="radar" aria-label="5指標レーダー"></canvas></div>
+    </div>
+
+    <div id="typeBar" class="bar">相性タイプ：—</div>
+    <div id="summary" class="bubble">—</div>
+    <img class="boy" src="./img/char-boy.PNG" alt="キャラクター">
+  </section>
+</main>
+
+<script>
+const API = (window.API_BASE||'').replace(/\/+$/,'');
+const q  = new URL(location.href).searchParams;
+const a  = q.get('a'), b = q.get('b');
+if(!a || !b){ location.replace('./index.html'); }
+
+async function fetchScore(a,b){
+  let r = await fetch(API+'/score',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({typeA:a,typeB:b})});
+  let j = await r.json();
+  if(!r.ok){
+    r = await fetch(API+'/score',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({a,b})});
+    j = await r.json();
+    if(!r.ok) throw new Error(j.detail||'score error');
+  }
+  return j;
+}
+/* 0〜100/0〜1 → 0〜1（表示用） */
+function norm(x){ let v=Number(x); if(!isFinite(v)) return 0; if(v>1) v/=100; if(v<0) v=0; if(v>1) v=1; return v; }
+function scoresToArray(p){
+  const s=p.scores||{}; const get=(...ks)=>{for(const k of ks){if(s[k]!==undefined&&s[k]!==null&&s[k]!=='')return s[k]}return 0};
+  return [norm(get('empathy','共感')),norm(get('harmony','調和')),norm(get('dependence','依存')),
+          norm(get('stimulation','刺激')),norm(get('trust','信頼'))];
+}
+(async()=>{
+  try{
+    const p=await fetchScore(a,b);
+    document.getElementById('typeBar').textContent='相性タイプ：'+(p.label||p?.micro?.type||'—');
+    document.getElementById('summary').textContent=p.summary||p?.copy?.catch||'—';
+    document.getElementById('toDetail').href=`./detail.html?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`;
+
+    new Chart(document.getElementById('radar').getContext('2d'),{
+      type:'radar',
+      data:{ labels:['共感','調和','依存','刺激','信頼'],
+        datasets:[{ data:scoresToArray(p), fill:true, pointRadius:0, borderWidth:2,
+          borderColor:'rgba(255,105,180,0.95)', backgroundColor:'rgba(255,105,180,0.25)'}] },
+      options:{
+        responsive:true, maintainAspectRatio:false, layout:{padding:20},
+        plugins:{legend:{display:false}}, elements:{line:{tension:0}},
+        scales:{ r:{ min:0,max:1,beginAtZero:true, ticks:{display:false},
+          grid:{circular:true,color:'rgba(0,0,0,0.06)'}, angleLines:{color:'rgba(0,0,0,0.06)'},
+          pointLabels:{color:'#6b5a68',font:{size:12},padding:10} } }
+      }
+    });
+  }catch(e){ alert('通信エラー：結果を取得できませんでした'); }
+})();
+</script>
+</body>
+</html>
