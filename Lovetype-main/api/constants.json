@@ -1,6 +1,0 @@
-{
-  "weights": { "w_dyn": 1.25, "w_sta": 0.85, "w_bond": 1.20, "w_trust": 0.60 },
-  "trust_high": 0.66,
-  "margin_hybrid": 0.10,
-  "trust_divisor": 200
-}
